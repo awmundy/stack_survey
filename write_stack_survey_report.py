@@ -30,6 +30,43 @@ def download_and_extract_raw_data(max_survey_year, survey_raw_data_dir):
         zip_file.extractall(out_dir)
         print(f'done downloading and extracting survey results for {year}')
 
+def safe_rename(df, columns):
+    '''
+    Renames columns in a df in a more strict manner. Old column names must exist,
+    new ones must not, and the rename dict can't have duplicate keys or values.
+    :param df: dataframe to have its columns renamed
+    :param columns: dict of {column_old_name: column_new_name}
+    '''
+    try:
+        assert len(set(columns.keys())) == len(columns.keys())
+    except:
+        raise Exception('Rename dict contains duplicate keys')
+
+    try:
+        assert len(set(columns.values())) == len(columns.values())
+    except:
+            raise Exception('Rename dict contains duplicate values')
+
+
+    for old_name, new_name in columns.items():
+        # avoiding renaming to a column that already exists in the df
+        try:
+            assert new_name not in df
+        except:
+            raise Exception(f'{old_name} already present in df')
+
+        # old name must exist
+        try:
+            assert old_name in df
+        except:
+            raise Exception(f'{old_name} not in df')
+
+    df.rename(columns=columns, inplace=True)
+
+    return df
+
+
+
 max_survey_year = 2022
 survey_raw_data_dir = get_full_path('~/Documents/stack_overflow_survey_data/')
 os.makedirs(survey_raw_data_dir, exist_ok=True)
