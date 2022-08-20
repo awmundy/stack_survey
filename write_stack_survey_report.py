@@ -3,7 +3,11 @@ import pandas as pd
 import requests
 import zipfile
 import io
-import numpy as np
+from sklearn.preprocessing import MultiLabelBinarizer
+import matplotlib.pyplot as plt
+import plotly.express as px
+from plotly.subplots import make_subplots
+
 
 def get_full_path(_path):
     full_path = os.path.expanduser(_path)
@@ -216,66 +220,10 @@ def transpose_to_long_year_wide_category(plot_df):
     plot_df.drop(axis=0, index=0, inplace=True)
     plot_df.rename(columns={'category': 'year'}, inplace=True)
 
+    return plot_df
 
-max_survey_year = 2022
-survey_raw_data_dir = get_full_path('~/Documents/stack_overflow_survey_data/')
-os.makedirs(survey_raw_data_dir, exist_ok=True)
-
-download_and_extract_raw_data(max_survey_year, survey_raw_data_dir)
-
-
-# todo split out multiple answers wide with one hot encoding for each language
-def get_rename_dict(year):
-    renames = {'2022': {'OpSysProfessional use': 'OpSysProfessionalUse', # no space
-                        },
-               '2021': {'OpSys': 'OpSysProfessionalUse',
-                        },
-               '2020': {'DatabaseWorkedWith': 'DatabaseHaveWorkedWith',
-                        'DatabaseDesireNextYear': 'DatabaseWantToWorkWith',
-                        'LanguageWorkedWith': 'LanguageHaveWorkedWith',
-                        'LanguageDesireNextYear': 'LanguageWantToWorkWith',
-                        'NEWCollabToolsWorkedWith': 'NEWCollabToolsHaveWorkedWith',
-                        'NEWCollabToolsDesireNextYear': 'NEWCollabToolsWantToWorkWith',
-                        'OpSys': 'OpSysProfessionalUse',
-                        'PlatformWorkedWith': 'PlatformHaveWorkedWith',
-                        'PlatformDesireNextYear': 'PlatformWantToWorkWith',
-                        'MiscTechWorkedWith': 'MiscTechHaveWorkedWith',
-                        'MiscTechDesireNextYear': 'MiscTechWantToWorkWith',
-                        'WebframeWorkedWith': 'WebframeHaveWorkedWith',
-                        'WebframeDesireNextYear': 'WebframeWantToWorkWith',
-                        },
-               '2019': {'DatabaseWorkedWith': 'DatabaseHaveWorkedWith',
-                        'DatabaseDesireNextYear': 'DatabaseWantToWorkWith',
-                        'LanguageWorkedWith': 'LanguageHaveWorkedWith',
-                        'LanguageDesireNextYear': 'LanguageWantToWorkWith',
-                        'OpSys': 'OpSysProfessionalUse',
-                        'PlatformWorkedWith': 'PlatformHaveWorkedWith',
-                        'PlatformDesireNextYear': 'PlatformWantToWorkWith',
-                        'MiscTechWorkedWith': 'MiscTechHaveWorkedWith',
-                        'MiscTechDesireNextYear': 'MiscTechWantToWorkWith',
-                        'WebFrameWorkedWith': 'WebframeHaveWorkedWith',
-                        'WebFrameDesireNextYear': 'WebframeWantToWorkWith',},
-               '2018': {'DatabaseWorkedWith': 'DatabaseHaveWorkedWith',
-                        'DatabaseDesireNextYear': 'DatabaseWantToWorkWith',
-                        'LanguageWorkedWith': 'LanguageHaveWorkedWith',
-                        'LanguageDesireNextYear': 'LanguageWantToWorkWith',
-                        'OperatingSystem': 'OpSysProfessionalUse',
-                        'PlatformWorkedWith': 'PlatformHaveWorkedWith',
-                        'PlatformDesireNextYear': 'PlatformWantToWorkWith',},
-               }
-    rename_dict = renames[year]
-
-    return rename_dict
-
-# todo in 2022 primary operating system professional allows multiple options, figure out how to handle
-
-
-# ['2018', '2019', '2020', '2021', '2022']
-for year in ['2022']:
-    print(f'Prepping data for {year}')
-    df = pd.read_csv(f'{survey_raw_data_dir}{year}/survey_results_public.csv', dtype=str)
-    df = safe_rename(df, get_rename_dict(year))
-    keep_cols = \
+def get_report_cols():
+    report_cols = \
         [
             # 'Accessibility',
             # 'Age',
@@ -296,7 +244,7 @@ for year in ['2022']:
             # 'Frequency_1',
             # 'Frequency_2',
             # 'Frequency_3',
-            'Gender',
+            # 'Gender',
             # 'ICorPM',
             # 'Knowledge_1',
             # 'Knowledge_2',
@@ -357,25 +305,51 @@ for year in ['2022']:
             # 'YearsCode',
             # 'YearsCodePro'
          ]
-    if year >= '2020':
-        keep_cols += ['NEWCollabToolsHaveWorkedWith', 'NEWCollabToolsWantToWorkWith']
-    if year >= '2019':
-        keep_cols += ['MiscTechHaveWorkedWith', 'MiscTechWantToWorkWith',
-                      'WebframeHaveWorkedWith', 'WebframeWantToWorkWith',]
-    df = df[keep_cols].copy()
 
-    col = 'DatabaseHaveWorkedWith'
-    df['test'] = df[col]
-    df['test'] = df['test'].str.split(';')
-    # fill nas with an empty list, standard methods like fillna dont allow this
-    msk = df['test'].isnull()
-    df.loc[msk, 'test'] = [[]]
-    from sklearn.preprocessing import MultiLabelBinarizer
-    mlb = MultiLabelBinarizer()
-    mlb.fit(df['test'])
-    dummies_col_names = [col + '_' + x for x in mlb.classes_]
-    dummies = mlb.fit_transform(df['test'], columns=dummies_col_names)
-    df = pd.concat([df, dummies], axis=1)
+    return report_cols
+
+def get_report_cols_subset(report_cols, year):
+    if year < '2020':
+        report_cols -= ['NEWCollabToolsHaveWorkedWith', 'NEWCollabToolsWantToWorkWith']
+    if year < '2019':
+        report_cols -= ['MiscTechHaveWorkedWith', 'MiscTechWantToWorkWith',
+                        'WebframeHaveWorkedWith', 'WebframeWantToWorkWith',]
+
+    return report_cols
+
+max_survey_year = 2022
+survey_raw_data_dir = get_full_path('~/Documents/stack_overflow_survey_data/')
+os.makedirs(survey_raw_data_dir, exist_ok=True)
+
+download_and_extract_raw_data(max_survey_year, survey_raw_data_dir)
+
+report_years = ['2019', '2020', '2021', '2022']
+report_cols = get_report_cols()
+plot_df = pd.DataFrame()
+for col in report_cols:
+    for year in report_years:
+        print(f'Prepping data for {year}')
+        df = pd.read_csv(f'{survey_raw_data_dir}{year}/survey_results_public.csv', dtype=str)
+        df = safe_rename(df, get_rename_dict(year))
+        keep_cols = get_report_cols_subset(report_cols, year)
+        df = df[keep_cols].copy()
+
+        df[col] = convert_col_values_to_lists(df[col])
+        df[col] = fillna_col_of_lists(df[col])
+        dummies = get_dummies_from_series_with_list_values(df[col])
+        n_responses = len(dummies)
+        sum_df = pd.DataFrame(dummies.sum()).reset_index().rename(columns={'index': 'category', 0: str('pct')})
+
+        # convert absolute numbers to percentages
+        sum_df['pct'] = sum_df['pct'] / n_responses * 100
+        sum_df['year'] = year
+
+        if len(plot_df) == 0:
+            plot_df = sum_df
+        else:
+            plot_df = pd.concat([plot_df, sum_df])
+
+# plot_df = transpose_to_long_year_wide_category(plot_df)
 
     # categories = df[col].str.split(';').explode().unique().tolist()
     # for null_val in [np.nan, None]:
