@@ -260,10 +260,10 @@ def get_report_cols():
             # 'LearnCodeOnline',
             # 'MainBranch',
             # 'MentalHealth',
-            # 'MiscTechHaveWorkedWith',
-            # 'MiscTechWantToWorkWith',
-            # 'NEWCollabToolsHaveWorkedWith',
-            # 'NEWCollabToolsWantToWorkWith',
+            'MiscTechHaveWorkedWith',
+            'MiscTechWantToWorkWith',
+            'NEWCollabToolsHaveWorkedWith',
+            'NEWCollabToolsWantToWorkWith',
             # 'NEWSOSites',
             # 'OfficeStackAsyncHaveWorkedWith',
             # 'OfficeStackAsyncWantToWorkWith',
@@ -299,8 +299,8 @@ def get_report_cols():
             # 'VCHostingProfessional use',
             # 'VCInteraction',
             # 'VersionControlSystem',
-            # 'WebframeHaveWorkedWith',
-            # 'WebframeWantToWorkWith',
+            'WebframeHaveWorkedWith',
+            'WebframeWantToWorkWith',
             # 'WorkExp',
             # 'YearsCode',
             # 'YearsCodePro'
@@ -309,11 +309,14 @@ def get_report_cols():
     return report_cols
 
 def get_report_cols_subset(report_cols, year):
+    report_cols = report_cols.copy()
     if year < '2020':
-        report_cols -= ['NEWCollabToolsHaveWorkedWith', 'NEWCollabToolsWantToWorkWith']
+        for col in ['NEWCollabToolsHaveWorkedWith', 'NEWCollabToolsWantToWorkWith']:
+            report_cols.remove(col)
     if year < '2019':
-        report_cols -= ['MiscTechHaveWorkedWith', 'MiscTechWantToWorkWith',
-                        'WebframeHaveWorkedWith', 'WebframeWantToWorkWith',]
+        for col in ['MiscTechHaveWorkedWith', 'MiscTechWantToWorkWith',
+                    'WebframeHaveWorkedWith', 'WebframeWantToWorkWith',]:
+            report_cols.remove(col)
 
     return report_cols
 
@@ -325,15 +328,17 @@ download_and_extract_raw_data(max_survey_year, survey_raw_data_dir)
 
 report_years = ['2019', '2020', '2021', '2022']
 report_cols = get_report_cols()
-plot_df = pd.DataFrame()
+fig_dict = {}
 for col in report_cols:
+    plot_df = pd.DataFrame()
     for year in report_years:
-        print(f'Prepping data for {year}')
+        print(f'Prepping {col} data for {year}')
         df = pd.read_csv(f'{survey_raw_data_dir}{year}/survey_results_public.csv', dtype=str)
         df = safe_rename(df, get_rename_dict(year))
         keep_cols = get_report_cols_subset(report_cols, year)
         df = df[keep_cols].copy()
-
+        if col not in df:
+            continue
         df[col] = convert_col_values_to_lists(df[col])
         df[col] = fillna_col_of_lists(df[col])
         dummies = get_dummies_from_series_with_list_values(df[col])
@@ -349,12 +354,14 @@ for col in report_cols:
         else:
             plot_df = pd.concat([plot_df, sum_df])
 
-# plot_df = transpose_to_long_year_wide_category(plot_df)
+    fig = px.line(plot_df, x='year', y='pct', color='category', title=col, markers=True)
+    fig_dict[col] = fig
 
-    # categories = df[col].str.split(';').explode().unique().tolist()
-    # for null_val in [np.nan, None]:
-    #     if null_val in categories:
-    #         categories.remove(null_val)
-    # for category in categories:
-    #     msk = df[col].str.contains(category)
+output_path = '/home/amundy/Desktop/test.html'
+if os.path.exists(output_path):
+    os.remove(output_path)
+with open(output_path, 'a') as report:
+    for col, fig in fig_dict.items():
+        fig.write_html(report, full_html=False)
 
+print('Done writing report')
