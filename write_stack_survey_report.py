@@ -400,6 +400,10 @@ report_years = ['2019', '2020', '2021', '2022']
 report_cols = get_report_cols()
 raw_data = read_survey_results(report_years, survey_raw_data_dir, report_cols)
 fig_dict = {}
+
+# todo move values around so that they match the pattern of 2022, i.e. Node.js should be in Webframe questions
+
+
 for col in report_cols:
     plot_df = pd.DataFrame()
     for year in report_years:
@@ -407,8 +411,7 @@ for col in report_cols:
         df = raw_data[year].copy()
         if col not in df:
             continue
-        df[col] = convert_col_values_to_lists(df[col])
-        df[col] = fillna_col_of_lists(df[col])
+        df = prep_column(df, col, year)
         dummies = get_dummies_from_series_with_list_values(df[col])
         n_responses = len(dummies)
         sum_df = pd.DataFrame(dummies.sum()).reset_index().rename(columns={'index': 'category', 0: str('pct')})
