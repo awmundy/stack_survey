@@ -4,10 +4,10 @@ import requests
 import zipfile
 import io
 from sklearn.preprocessing import MultiLabelBinarizer
-import matplotlib.pyplot as plt
 import plotly.express as px
-from plotly.subplots import make_subplots
-
+import plotly.io as pio
+pio.renderers.default = "browser"
+import numpy as np
 
 def get_full_path(_path):
     full_path = os.path.expanduser(_path)
