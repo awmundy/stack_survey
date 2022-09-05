@@ -330,6 +330,66 @@ def get_report_cols_subset(report_cols, year):
 
     return report_cols
 
+def prep_column(df, col, year):
+    '''
+    Replaces values to match 2022 values where it seems like the values are approximately
+    equivalent across years. Also listifies values.
+    '''
+    replaces = {'DatabaseHaveWorkedWith':
+                    {'years': ['2019', '2020', '2021'],
+                     'replace_pairs': [['Firebase', 'Firebase Realtime Database']]},
+                'MiscTechHaveWorkedWith':
+                    {'years': ['2019', '2020', '2021'],
+                     # 2022 just has .Net
+                     'replace_pairs': [['.NET Core', '.NET'],
+                                       ['.NET Core / .NET 5', '.NET'],
+                                       ['.NET Framework', '.NET'],
+                                       ['.NET / .NET 5', '.NET']]},
+                'NEWCollabToolsHaveWorkedWith':
+                    {'years': ['2021'],
+                     'replace_pairs': [['PHPStorm', 'PhpStorm']]},
+                'OpSysProfessionalUse':
+                    {'years': ['2019', '2020', '2021'],
+                     'replace_pairs': [['MacOS', 'macOS']]},
+                'PlatformHaveWorkedWith':
+                    {'years': ['2019', '2020', '2021'],
+                     'replace_pairs': [['Google Cloud Platform', 'Google Cloud']]},
+                'WebframeHaveWorkedWith':
+                    {'years': ['2020'],
+                     'replace_pairs': [['ASP.NET Core', 'ASP.NET Core '],
+                                       ['Angular/Angular.js', 'Angular.js']]},
+                }
+
+    # duplicate k:v for the WantToWorkWith questions
+    for dict_key in list(replaces.keys()):
+        if 'HaveWorkedWith' in dict_key:
+            replaces[dict_key.replace('HaveWorkedWith', 'WantToWorkWith')] = replaces[dict_key]
+
+    if col in replaces.keys():
+        if year in replaces[col]['years']:
+            for replace_pair in replaces[col]['replace_pairs']:
+                old_val = replace_pair[0]
+                new_val = replace_pair[1]
+                df[col] = df[col].str.replace(old_val, new_val)
+
+    df[col] = convert_col_values_to_lists(df[col])
+    df[col] = fillna_col_of_lists(df[col])
+
+    return df
+
+def add_null_rows_for_missing_categories_for_legend(plot_df, report_years):
+    # add null rows for categories that weren't present in a given year and sort
+    # so that the legend is sorted
+    for category in plot_df['category'].unique():
+        for year in report_years:
+            msk = (plot_df['category'] == category) & (plot_df['year'] == year)
+            if msk.sum() == 0:
+                null_row = pd.DataFrame({'category' : [category], 'pct': [np.nan], 'year':[year]})
+                plot_df = pd.concat([plot_df, null_row])
+    plot_df.sort_values(by=['year', 'category'], inplace=True)
+
+    return plot_df
+
 max_survey_year = 2022
 survey_raw_data_dir = get_full_path('~/Documents/stack_overflow_survey_data/')
 os.makedirs(survey_raw_data_dir, exist_ok=True)
@@ -360,9 +420,14 @@ for col in report_cols:
         if len(plot_df) == 0:
             plot_df = sum_df
         else:
-            plot_df = pd.concat([plot_df, sum_df])
+            plot_df = pd.concat([plot_df, sum_df], ignore_index=True)
 
-    fig = px.line(plot_df, x='year', y='pct', color='category', title=col, markers=True)
+    plot_df = add_null_rows_for_missing_categories_for_legend(plot_df, report_years)
+    fig = px.line(plot_df, x='year', y='pct', color='category', title=col,
+                  markers=True)
+
+    # fix weird bug where x axis is sometimes out of order
+    fig.update_xaxes(categoryorder='array', categoryarray=report_years)
     fig_dict[col] = fig
 
 output_path = '/home/amundy/Desktop/test.html'
