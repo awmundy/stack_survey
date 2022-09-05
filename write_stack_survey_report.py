@@ -308,6 +308,16 @@ def get_report_cols():
 
     return report_cols
 
+def read_survey_results(report_years, survey_raw_data_dir, report_cols):
+    raw_data = {}
+    for year in report_years:
+        df = pd.read_csv(f'{survey_raw_data_dir}{year}/survey_results_public.csv', dtype=str)
+        df = safe_rename(df, get_rename_dict(year))
+        keep_cols = get_report_cols_subset(report_cols, year)
+        df = df[keep_cols].copy()
+        raw_data[year] = df
+    return raw_data
+
 def get_report_cols_subset(report_cols, year):
     report_cols = report_cols.copy()
     if year < '2020':
@@ -328,15 +338,13 @@ download_and_extract_raw_data(max_survey_year, survey_raw_data_dir)
 
 report_years = ['2019', '2020', '2021', '2022']
 report_cols = get_report_cols()
+raw_data = read_survey_results(report_years, survey_raw_data_dir, report_cols)
 fig_dict = {}
 for col in report_cols:
     plot_df = pd.DataFrame()
     for year in report_years:
         print(f'Prepping {col} data for {year}')
-        df = pd.read_csv(f'{survey_raw_data_dir}{year}/survey_results_public.csv', dtype=str)
-        df = safe_rename(df, get_rename_dict(year))
-        keep_cols = get_report_cols_subset(report_cols, year)
-        df = df[keep_cols].copy()
+        df = raw_data[year].copy()
         if col not in df:
             continue
         df[col] = convert_col_values_to_lists(df[col])
